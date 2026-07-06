@@ -65,11 +65,11 @@ def get_primary_keyword_app_logic(text):
     filtered = [w for w in words if w.lower() not in stop_words]
     
     if len(filtered) < 2: 
-        return "Sports News"
+        return "NFL Football match"
         
     most_common = Counter(filtered).most_common(2)
     keyword = f"{most_common[0][0]} {most_common[1][0]}"
-    print(f"📊 [App Matching Logic] Primary Subject Keyword Extracted: '{keyword}'")
+    print(f"📊 [NFL App Logic] Primary Subject Keyword Extracted: '{keyword}'")
     return keyword
 
 def search_vercel_cloud_bridge(keyword):
@@ -93,7 +93,7 @@ def search_vercel_cloud_bridge(keyword):
 def search_bing_direct_photos(keyword, max_results=20):
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126.0.0.0 Safari/537.36'}
-        url = f"https://www.bing.com/images/async?q={urllib.parse.quote(keyword)}&first=1&count=25"
+        url = f"https://www.bing.com/images/async?q={urllib.parse.quote(keyword + ' NFL football')}&first=1&count=25"
         r = requests.get(url, headers=headers, timeout=8)
         if r.status_code == 200:
             urls = re.findall(r'murl&quot;:&quot;(http[^&]+)&quot;', r.text) or re.findall(r'"murl":"(http[^"]+)"', r.text)
@@ -111,7 +111,7 @@ def search_wikimedia_images(keyword, max_results=15):
             "action": "query",
             "format": "json",
             "generator": "search",
-            "gsrsearch": f"filetype:bitmap {keyword}",
+            "gsrsearch": f"filetype:bitmap {keyword} american football",
             "gsrlimit": max_results,
             "prop": "imageinfo",
             "iiprop": "url"
@@ -316,7 +316,7 @@ def process_primary_automation_loop():
                 collected_feeds.append(p_obj)
         except: pass
 
-    collected_feeds.sort(key=lambda sxy: getattr(sxy, 'published_parsed', None) or getattr(sxy, 'updated_parsed', None) or (0,), reverse=False)
+    collected_feeds.sort(key=lambda sxy: getattr(sxy, 'published_parsed', None) or getattr(sxy, 'updated_updated_parsed', None) or (0,), reverse=False)
 
     filter_excluded_title = [xtr.strip().lower() for xtr in user_settings["exclude_title_keywords"].split(",") if xtr.strip()]
     time_limit_scale_hrs = float(user_settings.get("max_age_hours", 24.0))
