@@ -110,62 +110,24 @@ def get_primary_keyword_app_logic(text):
     print(f"📊 [App Matching Logic] Primary Subject Keyword Extracted: '{keyword}'")
     return keyword
 
-def search_vercel_cloud_bridge(keyword):
+def search_vercel_cloud_bridge(keyword, engine="ddg"):
     vercel_endpoint = os.environ.get("VERCEL_BRIDGE_URL")
     if not vercel_endpoint:
         return []
     
     try:
-        print(f"🌉 [Vercel Cloud Bridge Active] Fetching High-Res Photos for: '{keyword}'...")
-        r = requests.get(f"{vercel_endpoint}?q={urllib.parse.quote(keyword)}", timeout=10)
+        print(f"🌉 [Vercel Cloud Bridge Active] Fetching High-Res Photos via ({engine}) for: '{keyword}'...")
+        # Vercel ব্যাকঅ্যান্ডের সর্বোচ্চ সামঞ্জস্যের জন্য 'engine' এবং 'source' দুই প্যারামিটারেই ভ্যালু পাস করা হচ্ছে
+        url = f"{vercel_endpoint}?q={urllib.parse.quote(keyword)}&engine={engine}&source={engine}"
+        r = requests.get(url, timeout=10)
         if r.status_code == 200:
             data = r.json()
             images = data.get("images", [])
-            print(f"🎉 SUCCESS! Vercel Bridge delivered {len(images)} authentic player photos!")
+            print(f"🎉 SUCCESS! Vercel Bridge ({engine}) delivered {len(images)} authentic player photos!")
             return images
     except Exception as e:
-        print(f"Vercel Bridge Notice: {e}")
+        print(f"Vercel Bridge ({engine}) Notice: {e}")
         
-    return []
-
-def search_bing_direct_photos(keyword, max_results=20):
-    try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126.0.0.0 Safari/537.36'}
-        url = f"https://www.bing.com/images/async?q={urllib.parse.quote(keyword)}&first=1&count=25"
-        r = requests.get(url, headers=headers, timeout=8)
-        if r.status_code == 200:
-            urls = re.findall(r'murl&quot;:&quot;(http[^&]+)&quot;', r.text) or re.findall(r'"murl":"(http[^"]+)"', r.text)
-            clean_b_links = [u for u in list(dict.fromkeys(urls)) if any(ext in u.lower() for ext in ['.jpg','.jpeg','.png'])]
-            print(f"✅ Unblocked Direct Search Engine fetched: {len(clean_b_links)} direct high-res images!")
-            return clean_b_links[:max_results]
-    except Exception as eb:
-        print(f"Direct Search Exception: {eb}")
-    return []
-
-def search_wikimedia_images(keyword, max_results=15):
-    try:
-        url = "https://commons.wikimedia.org/w/api.php"
-        params = {
-            "action": "query",
-            "format": "json",
-            "generator": "search",
-            "gsrsearch": f"filetype:bitmap {keyword}",
-            "gsrlimit": max_results,
-            "prop": "imageinfo",
-            "iiprop": "url"
-        }
-        r = requests.get(url, params=params, timeout=8)
-        if r.status_code == 200:
-            pages = r.json().get("query", {}).get("pages", {})
-            urls = []
-            for p in pages.values():
-                imageinfo = p.get("imageinfo")
-                if imageinfo and len(imageinfo) > 0:
-                    img_url = imageinfo[0].get("url")
-                    if img_url and any(ext in img_url.lower() for ext in ['.jpg','.png','.jpeg']):
-                        urls.append(img_url)
-            return urls
-    except: pass
     return []
 
 def scrape_images_strictly_web(title, body_text, embedded_photos):
@@ -176,14 +138,18 @@ def scrape_images_strictly_web(title, body_text, embedded_photos):
         
     subject = get_primary_keyword_app_logic(body_text)
 
-    vercel_pics = search_vercel_cloud_bridge(subject)
-    candidates.extend(vercel_pics)
+    # ১ম প্রায়োরিটি: ডাকডাকগো (ভারসেল ক্লাউড ব্রিজের মাধ্যমে)
+    ddg_pics = search_vercel_cloud_bridge(subject, engine="ddg")
+    candidates.extend(ddg_pics)
 
-    direct_pics = search_bing_direct_photos(subject, max_results=20)
-    candidates.extend(direct_pics)
+    # ২য় প্রায়োরিটি: বিং ইমেজ সার্চ (ভারসেল ক্লাউড ব্রিজের মাধ্যমে)
+    if len(candidates) < 15:
+        bing_pics = search_vercel_cloud_bridge(subject, engine="bing")
+        candidates.extend(bing_pics)
 
+    # ৩য় প্রায়োরিটি: উইকিমিডিয়া কমন্স (ভারসেল ক্লাউড ব্রিজের মাধ্যমে)
     if len(candidates) < 8:
-        wiki_pics = search_wikimedia_images(subject, max_results=15)
+        wiki_pics = search_vercel_cloud_bridge(subject, engine="wiki")
         candidates.extend(wiki_pics)
 
     return list(dict.fromkeys(candidates))
@@ -269,11 +235,11 @@ def render_segment_by_ffmpeg(clip_index, segment_duration, img_obj, output_segme
     frame_count = max(int(segment_duration * 25), 10)
     
     if img_obj["type"] == "landscape":
-        step_val = 0.15 / frame_count
+        # সায়েন্টিফিক নোটেশন বাগ এড়াতে গাণিতিক হিসাব সরাসরি FFmpeg এ করা হচ্ছে
         if clip_index % 2 == 0:
-            lens_filter = f"zoompan=z='1.001 + {step_val}*in':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={frame_count}:s=1920x1080:fps=25"
+            lens_filter = f"zoompan=z='1.001+0.15*(in/{frame_count})':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={frame_count}:s=1920x1080:fps=25"
         else:
-            lens_filter = f"zoompan=z='max(1.001, 1.15 - {step_val}*in)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={frame_count}:s=1920x1080:fps=25"
+            lens_filter = f"zoompan=z='max(1.001, 1.15-0.15*(in/{frame_count}))':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={frame_count}:s=1920x1080:fps=25"
         
         cmd_arguments = [
             "ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error", 
@@ -317,7 +283,8 @@ def mix_sfx_to_audio(audio_path, timestamps, sfx_folder, sfx_volume, output_audi
     cmd = ["ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error", "-i", audio_path]
     filter_inputs = []
     
-    valid_ts = [t for t in timestamps if t > 0.1]
+    # প্রথম ফ্রেম (0.0) এবং একদম শেষ বাউন্ডারি ( timestamps[-1] ) বাদ দিয়ে ট্রানজিশন সাউন্ড প্লে করার লজিক
+    valid_ts = [t for t in timestamps[1:-1] if t > 0.1]
     
     for idx, ts in enumerate(valid_ts):
         sfx = random.choice(sfx_files)
