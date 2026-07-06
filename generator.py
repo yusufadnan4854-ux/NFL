@@ -65,11 +65,11 @@ def get_primary_keyword_app_logic(text):
     filtered = [w for w in words if w.lower() not in stop_words]
     
     if len(filtered) < 2: 
-        return "NFL Football match"
+        return "Sports News"
         
     most_common = Counter(filtered).most_common(2)
-    keyword = f"{most_common[0][0]} {most_common[1][0]} NFL football"
-    print(f"📊 [NFL Channel Logic] Primary Subject Keyword Extracted: '{keyword}'")
+    keyword = f"{most_common[0][0]} {most_common[1][0]}"
+    print(f"📊 [App Matching Logic] Primary Subject Keyword Extracted: '{keyword}'")
     return keyword
 
 def search_vercel_cloud_bridge(keyword):
@@ -78,12 +78,12 @@ def search_vercel_cloud_bridge(keyword):
         return []
     
     try:
-        print(f"🌉 [Vercel Cloud Bridge Active] Fetching NFL Photos for: '{keyword}'...")
+        print(f"🌉 [Vercel Cloud Bridge Active] Fetching High-Res Photos for: '{keyword}'...")
         r = requests.get(f"{vercel_endpoint}?q={urllib.parse.quote(keyword)}", timeout=10)
         if r.status_code == 200:
             data = r.json()
             images = data.get("images", [])
-            print(f"🎉 SUCCESS! Vercel Bridge delivered {len(images)} authentic NFL player photos!")
+            print(f"🎉 SUCCESS! Vercel Bridge delivered {len(images)} authentic player photos!")
             return images
     except Exception as e:
         print(f"Vercel Bridge Notice: {e}")
@@ -111,7 +111,7 @@ def search_wikimedia_images(keyword, max_results=15):
             "action": "query",
             "format": "json",
             "generator": "search",
-            "gsrsearch": f"filetype:bitmap {keyword} american football",
+            "gsrsearch": f"filetype:bitmap {keyword}",
             "gsrlimit": max_results,
             "prop": "imageinfo",
             "iiprop": "url"
