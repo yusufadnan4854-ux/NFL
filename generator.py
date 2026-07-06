@@ -11,7 +11,6 @@ import urllib.parse
 from bs4 import BeautifulSoup
 from collections import Counter
 from PIL import Image, ImageFilter, ImageStat
-from concurrent.futures import ThreadPoolExecutor
 import feedparser  
 import edge_tts
 
@@ -112,9 +111,6 @@ def search_vercel_cloud_bridge(keyword):
     return []
 
 def search_bing_direct_photos(keyword, max_results=20):
-    """
-    ১০০% স্পোর্টস-ডায়নামিক সার্চ অ্যান্ডপয়েন্ট (কোনো হার্ডকোডেড গেম কি-ওয়ার্ড ছাড়া)
-    """
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126.0.0.0 Safari/537.36'}
         url = f"https://www.bing.com/images/async?q={urllib.parse.quote(keyword)}&first=1&count=25"
@@ -129,9 +125,6 @@ def search_bing_direct_photos(keyword, max_results=20):
     return []
 
 def search_wikimedia_images(keyword, max_results=15):
-    """
-    ১০০% খেলাধুলা ডায়নামিক উইকিমিডিয়া এপিআই (কোনো হার্ডকোডেড বাস্কেটবল এক্সটেনশন ছাড়া)
-    """
     try:
         url = "https://commons.wikimedia.org/w/api.php"
         params = {
@@ -287,10 +280,6 @@ def render_zoom_segment_by_ffmpeg(clip_index, segment_duration, input_img_path, 
     return output_segment_path
 
 def mix_transition_sfx_to_audio(main_audio_path, transition_timestamps, output_audio_path):
-    """
-    🎵 [সাউন্ড ইফেক্ট ইঞ্জিন] প্রতিটি ছবি পরিবর্তনের ট্র্যানজিশন পয়েন্টে র্যান্ডম SFX মিক্সিং 
-    """
-    # 📌 সেফগার্ড: কোনো ট্র্যানজিশন পয়েন্ট না থাকলে এপিআই আমিক্স ক্র্যাশ এড়াতে রিলিজ
     if not transition_timestamps:
         print("💡 No transition timestamps detected. Bypassing SFX mixing.")
         return main_audio_path
@@ -318,7 +307,6 @@ def mix_transition_sfx_to_audio(main_audio_path, transition_timestamps, output_a
     final_mix_streams = "[0:a]" + "".join([f"[del_{x}]" for x in range(len(transition_timestamps))])
     total_inputs = len(transition_timestamps) + 1
     
-    # amix দিয়ে ভয়েস যাতে হালকা না হয়ে যায়, সেজন্য ফাইনাল ভলিউম স্কেলিং করা হলো
     filter_complex = f"{filter_inputs}{final_mix_streams}amix=inputs={total_inputs}:duration=first,volume=1.8"
     
     cmd.extend(["-filter_complex", filter_complex, output_audio_path])
@@ -363,6 +351,25 @@ def safe_upload_to_youtube(video_full_path, thumb_full_path, title, video_descri
             print("Associated cover photo added effectively.\n")
         except Exception as e:
             print(f"Thumbnail upload failed: {e}")
+
+def hex_to_ass_color(hex_str, opacity_float=1.0):
+    hex_str = hex_str.lstrip('#')
+    red, green, blue = hex_str[0:2], hex_str[2:4], hex_str[4:6]
+    alpha_hex = int((1.0 - opacity_float) * 255)
+    return f"&H{alpha_hex:02X}{blue}{green}{red}"
+
+def get_audio_duration(audio_path):
+    try:
+        result = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", os.path.abspath(audio_path)], capture_output=True, text=True, check=True)
+        return float(result.stdout.strip())
+    except: return 0.0
+
+def get_sentence_timestamps(srt_path):
+    if not os.path.exists(srt_path): return []
+    with open(srt_path, "r", encoding="utf-8") as srt_reader: content = srt_reader.read()
+    regex_clock = re.compile(r'(\d{2}):(\d{2}):(\d{2}),(\d{3}) -->')
+    second_values = [int(p[0])*3600 + int(p[1])*60 + int(p[2]) + int(p[3])/1000.0 for p in regex_clock.findall(content)]
+    return sorted(list(set(second_values)))
 
 def process_primary_automation_loop():
     if not os.path.exists("config.json"): return
@@ -470,8 +477,10 @@ def process_primary_automation_loop():
                 word_count = len(p.split())
                 if word_count < 80:
                     if len(paragraphs) == 0:
+                        # প্রথম প্যারাগ্রাফে ৮০ শব্দের কম থাকলে পরেরটির জন্য হোল্ড করবে
                         temp_first = p if temp_first is None else temp_first + "\n\n" + p
                     else:
+                        # পূর্ববর্তী প্যারাগ্রাফের সাথে মার্জ হবে
                         paragraphs[-1] = paragraphs[-1] + "\n\n" + p
                 else:
                     if temp_first:
@@ -496,7 +505,7 @@ def process_primary_automation_loop():
             for para_idx, para_text in enumerate(paragraphs):
                 para_word_count = len(para_text.split())
                 
-                # দৈর্ঘ্য অনুযায়ী ডাউনলোডের সংখ্যা বন্টন
+                # দৈর্ঘ্য অনুযায়ী ডাউনলোডের সংখ্যা বন্টন (৮০-শব্দ মার্জিং সাপেক্ষে ডাইনামিক প্রপোশন)
                 if para_word_count > 200:
                     max_pics_for_para = random.randint(15, 20)
                 else:
@@ -513,6 +522,7 @@ def process_primary_automation_loop():
                     try:
                         rd = requests.get(image_link, timeout=5, headers=headers)
                         if rd.status_code == 200 and len(rd.content) > 10240: 
+                            # নামের সাথে প্যারাগ্রাফ ইন্ডেক্স রাখায় ছবিগুলো ক্রমানুসারে সাজানো থাকবে
                             fname = f"imv_para_{para_idx:02d}_dw{succesfully_got_downloads:03d}.jpg"
                             with open(os.path.join(target_imgdir, fname), 'wb') as fgxv: 
                                 fgxv.write(rd.content)
@@ -608,13 +618,13 @@ def process_primary_automation_loop():
             clx_bkg = hex_to_ass_color(user_settings["bg_color"], user_settings.get("bg_opacity", 0.5))
             stylstr_for_subs = f"FontName=Arial,FontSize={user_settings['font_size']},PrimaryColour={clx_pri},BackColour={clx_bkg},BorderStyle={user_settings['border_style']},Outline=2,Shadow=1,Alignment=2,MarginV={user_settings['margin_v']}"
 
+            absolute_srt_path = os.path.abspath(path_srt).replace("\\", "/")
+            tclmstr_subtitles_filter = f"subtitles='{absolute_srt_path}':force_style='{stylstr_for_subs}'"
+
             # 📌 ৩. সাউন্ড ইফেক্ট ইঞ্জিন ট্রিগার করা (প্যারাগ্রাফ স্লাইডিং ট্র্যানজিশন টাইমে)
             transition_timestamps = sentence_timers[1:-1]
             path_mp3_sfx = os.path.join(wkspace, "audio_sfx.mp3")
             final_audio_path = mix_transition_sfx_to_audio(path_mp3, transition_timestamps, path_mp3_sfx)
-
-            absolute_srt_path = os.path.abspath(path_srt).replace("\\", "/")
-            tclmstr_subtitles_filter = f"subtitles='{absolute_srt_path}':force_style='{stylstr_for_subs}'"
 
             subs_cmd = [
                 "ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error", 
