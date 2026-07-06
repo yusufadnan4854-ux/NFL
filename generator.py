@@ -11,19 +11,14 @@ import urllib.parse
 from bs4 import BeautifulSoup
 from collections import Counter
 from PIL import Image, ImageFilter, ImageStat
-from concurrent.futures import ThreadPoolExecutor  # 📌 বাদ পড়া ইমপোর্টটি যুক্ত করা হলো
+from concurrent.futures import ThreadPoolExecutor
 import feedparser  
 import edge_tts
+import warnings
 
-try:
-    from ddgs import DDGS
-    DDG_SDK_AVAILABLE = True
-except ImportError:
-    try:
-        from duckduckgo_search import DDGS
-        DDG_SDK_AVAILABLE = True
-    except ImportError:
-        DDG_SDK_AVAILABLE = False
+# 📌 পাইথন ও গুগল এপিআই লাইব্রেরির অপ্রয়োজনীয় হার্মলেস সকেট ওয়ার্নিংগুলো সম্পূর্ণরূপে লুকানোর ফিল্টার
+warnings.filterwarnings("ignore", category=ResourceWarning)
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 # ১০০% ভেরিফায়েড হাই-রেজুলেশন ডাইনামিক বাস্কেটবল স্টেডিয়াম কভার স্টোরেজ 
 GENERIC_BASKETBALL_FALLBACKS = [
@@ -86,7 +81,7 @@ def get_primary_keyword_app_logic(text):
     filtered = [w for w in words if w.lower() not in stop_words]
     
     if len(filtered) < 2: 
-        return "NFL Football match"
+        return "Sports News"
         
     most_common = Counter(filtered).most_common(2)
     keyword = f"{most_common[0][0]} {most_common[1][0]}"
@@ -114,7 +109,7 @@ def search_vercel_cloud_bridge(keyword):
 def search_bing_direct_photos(keyword, max_results=20):
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126.0.0.0 Safari/537.36'}
-        url = f"https://www.bing.com/images/async?q={urllib.parse.quote(keyword + ' NFL football')}&first=1&count=25"
+        url = f"https://www.bing.com/images/async?q={urllib.parse.quote(keyword)}&first=1&count=25"
         r = requests.get(url, headers=headers, timeout=8)
         if r.status_code == 200:
             urls = re.findall(r'murl&quot;:&quot;(http[^&]+)&quot;', r.text) or re.findall(r'"murl":"(http[^"]+)"', r.text)
@@ -132,7 +127,7 @@ def search_wikimedia_images(keyword, max_results=15):
             "action": "query",
             "format": "json",
             "generator": "search",
-            "gsrsearch": f"filetype:bitmap {keyword} american football",
+            "gsrsearch": f"filetype:bitmap {keyword}",
             "gsrlimit": max_results,
             "prop": "imageinfo",
             "iiprop": "url"
@@ -145,7 +140,7 @@ def search_wikimedia_images(keyword, max_results=15):
                 imageinfo = p.get("imageinfo")
                 if imageinfo and len(imageinfo) > 0:
                     img_url = imageinfo[0].get("url")
-                    if img_url and any(ext in img_url.lower() French in ext.lower() or 'german' in ext.lower() for ext in ['.jpg','.png','.jpeg']):
+                    if img_url and any(ext in img_url.lower() for ext in ['.jpg','.png','.jpeg']):
                         urls.append(img_url)
             return urls
     except: pass
@@ -280,7 +275,7 @@ def render_zoom_segment_by_ffmpeg(clip_index, segment_duration, input_img_path, 
     subprocess.run(cmd_arguments, check=True)
     return output_segment_path
 
-def mix_transition_sfx_to_audio(main_audio_path, transition_timestamps, output_audio_path):
+def mix_transition_sfx_to_audio(main_audio_path, transition_timestamps, output_audio_path, sfx_volume=0.3):
     if not transition_timestamps:
         print("💡 No transition timestamps detected. Bypassing SFX mixing.")
         return main_audio_path
@@ -299,16 +294,18 @@ def mix_transition_sfx_to_audio(main_audio_path, transition_timestamps, output_a
     cmd = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", main_audio_path]
     
     filter_inputs = ""
+    final_mix_streams = "[0:a]"
     for idx, t in enumerate(transition_timestamps):
         sfx_file = random.choice(sfx_files)
         cmd.extend(["-i", sfx_file])
         ms_delay = int(t * 1000)
-        filter_inputs += f"[{idx+1}:a]adelay={ms_delay}|{ms_delay}[del_{idx}]; "
+        filter_inputs += f"[{idx+1}:a]adelay={ms_delay}|{ms_delay}[del_{idx}]; [del_{idx}]volume={sfx_volume}[sfx_vol_{idx}]; "
+        final_mix_streams += f"[sfx_vol_{idx}]"
         
-    final_mix_streams = "[0:a]" + "".join([f"[del_{x}]" for x in range(len(transition_timestamps))])
     total_inputs = len(transition_timestamps) + 1
     
-    filter_complex = f"{filter_inputs}{final_mix_streams}amix=inputs={total_inputs}:duration=first,volume=1.8"
+    # amix দিয়ে ভয়েস যাতে হালকা না হয়ে যায়, সেজন্য normalize=0 সেট করা হলো
+    filter_complex = f"{filter_inputs}{final_mix_streams}amix=inputs={total_inputs}:duration=first:normalize=0"
     
     cmd.extend(["-filter_complex", filter_complex, output_audio_path])
     try:
@@ -619,15 +616,15 @@ def process_primary_automation_loop():
             clx_bkg = hex_to_ass_color(user_settings["bg_color"], user_settings.get("bg_opacity", 0.5))
             stylstr_for_subs = f"FontName=Arial,FontSize={user_settings['font_size']},PrimaryColour={clx_pri},BackColour={clx_bkg},BorderStyle={user_settings['border_style']},Outline=2,Shadow=1,Alignment=2,MarginV={user_settings['margin_v']}"
 
-            # 📌 ৩. সাউন্ড ইফেক্ট ইঞ্জিন ট্রিগার করা (প্যারাগ্রাফ স্লাইডিং ট্র্যানজিশন টাইমে)
-            transition_timestamps = sentence_timers[1:-1]
-            path_mp3_sfx = os.path.join(wkspace, "audio_sfx.mp3")
-            final_audio_path = mix_transition_sfx_to_audio(path_mp3, transition_timestamps, path_mp3_sfx)
-
             absolute_srt_path = os.path.abspath(path_srt).replace("\\", "/")
             tclmstr_subtitles_filter = f"subtitles='{absolute_srt_path}':force_style='{stylstr_for_subs}'"
 
-            # FFMPEG এ সাউন্ড ইফেক্টযুক্ত অডিও ফাইল (final_audio_path) লিংক করা হলো
+            # 📌 ৩. সাউন্ড ইফেক্ট ইঞ্জিন ট্রিগার করা (প্যারাগ্রাফ স্লাইডিং ট্র্যানজিশন টাইমে)
+            transition_timestamps = sentence_timers[1:-1]
+            path_mp3_sfx = os.path.join(wkspace, "audio_sfx.mp3")
+            sfx_volume_val = user_settings.get("sfx_volume", 0.3) # config.json থেকে স্লাইডারের ৩% কাস্টম ভলিউম রিড
+            final_audio_path = mix_transition_sfx_to_audio(path_mp3, transition_timestamps, path_mp3_sfx, sfx_volume=sfx_volume_val)
+
             subs_cmd = [
                 "ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error", 
                 "-i", os.path.abspath(raw_tmp_output).replace("\\", "/"), 
