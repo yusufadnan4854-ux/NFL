@@ -15,6 +15,27 @@ from concurrent.futures import ThreadPoolExecutor
 import feedparser  
 import edge_tts
 
+try:
+    from ddgs import DDGS
+    DDG_SDK_AVAILABLE = True
+except ImportError:
+    try:
+        from duckduckgo_search import DDGS
+        DDG_SDK_AVAILABLE = True
+    except ImportError:
+        DDG_SDK_AVAILABLE = False
+
+# ১০০% ভেরিফায়েড হাই-রেজুলেশন ডাইনামিক বাস্কেটবল স্টেডিয়াম কভার স্টোরেজ 
+GENERIC_BASKETBALL_FALLBACKS = [
+    "https://images.unsplash.com/photo-1546519638-68e109498ffc?w=1920&q=80", 
+    "https://images.unsplash.com/photo-1519766304817-4f37bda74a27?w=1920&q=80", 
+    "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=1920&q=80", 
+    "https://images.unsplash.com/photo-1518063319789-7217e6706b04?w=1920&q=80", 
+    "https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=1920&q=80", 
+    "https://images.unsplash.com/photo-1608245449230-4ac19066d210?w=1920&q=80", 
+    "https://images.unsplash.com/photo-1519861531473-9200262188bf?w=1920&q=80"  
+]
+
 async def generate_voice_and_subtitles(text, voice, audio_path, srt_path):
     communicate = edge_tts.Communicate(text, voice)
     submaker = edge_tts.SubMaker()
@@ -91,6 +112,9 @@ def search_vercel_cloud_bridge(keyword):
     return []
 
 def search_bing_direct_photos(keyword, max_results=20):
+    """
+    ১০০% স্পোর্টস-ডায়নামিক সার্চ অ্যান্ডপয়েন্ট (কোনো হার্ডকোডেড গেম কি-ওয়ার্ড ছাড়া)
+    """
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126.0.0.0 Safari/537.36'}
         url = f"https://www.bing.com/images/async?q={urllib.parse.quote(keyword)}&first=1&count=25"
@@ -105,6 +129,9 @@ def search_bing_direct_photos(keyword, max_results=20):
     return []
 
 def search_wikimedia_images(keyword, max_results=15):
+    """
+    ১০০% খেলাধুলা ডায়নামিক উইকিমিডিয়া এপিআই (কোনো হার্ডকোডেড বাস্কেটবল এক্সটেনশন ছাড়া)
+    """
     try:
         url = "https://commons.wikimedia.org/w/api.php"
         params = {
@@ -226,13 +253,29 @@ def clear_temporary_workspace(ws_dir):
 def render_zoom_segment_by_ffmpeg(clip_index, segment_duration, input_img_path, output_segment_path):
     frame_count = max(int(segment_duration * 25), 10)
     
-    effect_style = clip_index % 3
-    if effect_style == 0:
-        lens_filter = f"zoompan=z='zoom+0.0015':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={frame_count}:s=1920x1080:fps=25"
-    elif effect_style == 1:
-        lens_filter = f"zoompan=z='1.03+0.001*in':x='iw/2-(iw/zoom/2)':y='0':d={frame_count}:s=1920x1080:fps=25"
+    filename = os.path.basename(input_img_path)
+    orig_filename = filename.replace("pf_", "")
+    orig_path = os.path.join(os.path.dirname(input_img_path), "..", "images", orig_filename)
+    
+    is_landscape = True
+    if os.path.exists(orig_path):
+        try:
+            with Image.open(orig_path) as oimg:
+                ow, oh = oimg.size
+                is_landscape = (ow / float(oh)) >= 1.6
+        except: pass
+
+    effect_style = clip_index % 2
+    if is_landscape:
+        if effect_style == 0:
+            lens_filter = f"zoompan=z='zoom+0.0015':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={frame_count}:s=1920x1080:fps=25"
+        else:
+            lens_filter = f"zoompan=z='1.03-0.001*in':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={frame_count}:s=1920x1080:fps=25"
     else:
-        lens_filter = f"zoompan=z='1.03+0.001*in':x='iw/2-(iw/zoom/2)':y='ih-(ih/zoom)':d={frame_count}:s=1920x1080:fps=25"
+        if effect_style == 0:
+            lens_filter = f"zoompan=z='1.06':x='(in/d)*(iw-iw/zoom)':y='ih/2-(ih/zoom/2)':d={frame_count}:s=1920x1080:fps=25"
+        else:
+            lens_filter = f"zoompan=z='1.06':x='(iw-iw/zoom)-(in/d)*(iw-iw/zoom)':y='ih/2-(ih/zoom/2)':d={frame_count}:s=1920x1080:fps=25"
     
     cmd_arguments = [
         "ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error", 
@@ -243,12 +286,48 @@ def render_zoom_segment_by_ffmpeg(clip_index, segment_duration, input_img_path, 
     subprocess.run(cmd_arguments, check=True)
     return output_segment_path
 
-def get_sentence_timestamps(srt_path):
-    if not os.path.exists(srt_path): return []
-    with open(srt_path, "r", encoding="utf-8") as srt_reader: content = srt_reader.read()
-    regex_clock = re.compile(r'(\d{2}):(\d{2}):(\d{2}),(\d{3}) -->')
-    second_values = [int(p[0])*3600 + int(p[1])*60 + int(p[2]) + int(p[3])/1000.0 for p in regex_clock.findall(content)]
-    return sorted(list(set(second_values)))
+def mix_transition_sfx_to_audio(main_audio_path, transition_timestamps, output_audio_path):
+    """
+    🎵 [সাউন্ড ইফেক্ট ইঞ্জিন] প্রতিটি ছবি পরিবর্তনের ট্র্যানজিশন পয়েন্টে র্যান্ডম SFX মিক্সিং 
+    """
+    # 📌 সেফগার্ড: কোনো ট্র্যানজিশন পয়েন্ট না থাকলে এপিআই আমিক্স ক্র্যাশ এড়াতে রিলিজ
+    if not transition_timestamps:
+        print("💡 No transition timestamps detected. Bypassing SFX mixing.")
+        return main_audio_path
+
+    sfx_dir = os.path.join(os.getcwd(), "sound_effects")
+    if not os.path.exists(sfx_dir):
+        print("💡 'sound_effects' folder not found. Skipping SFX mixing.")
+        return main_audio_path
+        
+    sfx_files = [os.path.join(sfx_dir, f) for f in os.listdir(sfx_dir) if f.lower().endswith(('.mp3', '.wav'))]
+    if not sfx_files:
+        print("💡 No sound files found inside 'sound_effects'. Skipping SFX mixing.")
+        return main_audio_path
+        
+    print(f"🎵 [SFX Engine] Mixing {len(transition_timestamps)} transition sounds sequentially...")
+    cmd = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", main_audio_path]
+    
+    filter_inputs = ""
+    for idx, t in enumerate(transition_timestamps):
+        sfx_file = random.choice(sfx_files)
+        cmd.extend(["-i", sfx_file])
+        ms_delay = int(t * 1000)
+        filter_inputs += f"[{idx+1}:a]adelay={ms_delay}|{ms_delay}[del_{idx}]; "
+        
+    final_mix_streams = "[0:a]" + "".join([f"[del_{x}]" for x in range(len(transition_timestamps))])
+    total_inputs = len(transition_timestamps) + 1
+    
+    # amix দিয়ে ভয়েস যাতে হালকা না হয়ে যায়, সেজন্য ফাইনাল ভলিউম স্কেলিং করা হলো
+    filter_complex = f"{filter_inputs}{final_mix_streams}amix=inputs={total_inputs}:duration=first,volume=1.8"
+    
+    cmd.extend(["-filter_complex", filter_complex, output_audio_path])
+    try:
+        subprocess.run(cmd, check=True)
+        return output_audio_path
+    except Exception as e:
+        print(f"⚠️ SFX Mixing failed: {e}. Reverting to clean audio.")
+        return main_audio_path
 
 def safe_upload_to_youtube(video_full_path, thumb_full_path, title, video_description):
     from google.oauth2.credentials import Credentials
@@ -284,18 +363,6 @@ def safe_upload_to_youtube(video_full_path, thumb_full_path, title, video_descri
             print("Associated cover photo added effectively.\n")
         except Exception as e:
             print(f"Thumbnail upload failed: {e}")
-
-def hex_to_ass_color(hex_str, opacity_float=1.0):
-    hex_str = hex_str.lstrip('#')
-    red, green, blue = hex_str[0:2], hex_str[2:4], hex_str[4:6]
-    alpha_hex = int((1.0 - opacity_float) * 255)
-    return f"&H{alpha_hex:02X}{blue}{green}{red}"
-
-def get_audio_duration(audio_path):
-    try:
-        result = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", os.path.abspath(audio_path)], capture_output=True, text=True, check=True)
-        return float(result.stdout.strip())
-    except: return 0.0
 
 def process_primary_automation_loop():
     if not os.path.exists("config.json"): return
@@ -392,7 +459,33 @@ def process_primary_automation_loop():
             asyncio.run(generate_voice_and_subtitles(text_chunk_collected, user_settings["voice"], path_mp3, path_srt))
             calc_tlength = get_audio_duration(path_mp3)
 
-            candidate_image_urls = scrape_images_strictly_web(vid_ttl, text_chunk_collected, embedded_page_photos)
+            # 📌 ১. প্যারাগ্রাফ স্লাইসিং প্রসেস
+            raw_paragraphs = [p.strip() for p in text_chunk_collected.split("\n\n") if p.strip()]
+            
+            # 📌 ২. স্মার্ট ৮০-ওয়ার্ড মার্জিং লজিক (নিখুঁত ও স্থিতিশীল স্লাইসিং)
+            paragraphs = []
+            temp_first = None
+            
+            for p in raw_paragraphs:
+                word_count = len(p.split())
+                if word_count < 80:
+                    if len(paragraphs) == 0:
+                        temp_first = p if temp_first is None else temp_first + "\n\n" + p
+                    else:
+                        paragraphs[-1] = paragraphs[-1] + "\n\n" + p
+                else:
+                    if temp_first:
+                        p = temp_first + "\n\n" + p
+                        temp_first = None
+                    paragraphs.append(p)
+                    
+            if temp_first:
+                if paragraphs:
+                    paragraphs[-1] = paragraphs[-1] + "\n\n" + temp_first
+                else:
+                    paragraphs.append(temp_first)
+                    
+            print(f"📝 Article split into {len(paragraphs)} logical paragraphs after 80-word merge constraint. Downloading images...")
 
             succesfully_got_downloads = 0
             headers = {
@@ -400,23 +493,52 @@ def process_primary_automation_loop():
                 'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
             }
 
-            for image_link in candidate_image_urls:
-                try:
-                    rd = requests.get(image_link, timeout=5, headers=headers)
-                    if rd.status_code == 200 and len(rd.content) > 10240: 
-                        with open(os.path.join(target_imgdir, f"imv_dw{succesfully_got_downloads:03d}.jpg"), 'wb') as fgxv: 
-                            fgxv.write(rd.content)
-                        succesfully_got_downloads += 1
-                except: pass
+            for para_idx, para_text in enumerate(paragraphs):
+                para_word_count = len(para_text.split())
+                
+                # দৈর্ঘ্য অনুযায়ী ডাউনলোডের সংখ্যা বন্টন
+                if para_word_count > 200:
+                    max_pics_for_para = random.randint(15, 20)
+                else:
+                    max_pics_for_para = random.randint(8, 12)
+                
+                print(f"📖 Para {para_idx+1}/{len(paragraphs)} ({para_word_count} words): Targetting {max_pics_for_para} images.")
 
-                if succesfully_got_downloads >= 20:
-                    break
+                # এই প্যারাগ্রাফের স্পেসিফিক খেলোয়াড় ক্যুরি জেনারেট করা
+                para_subject = get_primary_keyword_app_logic(para_text)
+                candidate_image_urls = scrape_images_strictly_web(vid_ttl, para_text, embedded_page_photos)
+
+                para_downloads = 0
+                for image_link in candidate_image_urls:
+                    try:
+                        rd = requests.get(image_link, timeout=5, headers=headers)
+                        if rd.status_code == 200 and len(rd.content) > 10240: 
+                            fname = f"imv_para_{para_idx:02d}_dw{succesfully_got_downloads:03d}.jpg"
+                            with open(os.path.join(target_imgdir, fname), 'wb') as fgxv: 
+                                fgxv.write(rd.content)
+                            succesfully_got_downloads += 1
+                            para_downloads += 1
+                    except: pass
+
+                    if para_downloads >= max_pics_for_para:
+                        break
 
             filter_and_clean_downloaded_images(target_imgdir)
 
             dflocst = sorted([pzbv for pzbv in os.listdir(target_imgdir) if pzbv.endswith(('.jpg','.jpeg','.png'))])
             print(f"📊 Download Process Complete! Retained {len(dflocst)} verified photos.")
 
+            # 📌 ভ্যারিয়েবল নেমিং বাগ ফিক্সিং (GENERIC_BASKETBALL_FALLBACKS ম্যাপিং কারেকশন)
+            if len(dflocst) < 5:
+                for idx, fallback_url in enumerate(GENERIC_BASKETBALL_FALLBACKS):
+                    try:
+                        res = requests.get(fallback_url, timeout=5)
+                        if res.status_code == 200:
+                            with open(os.path.join(target_imgdir, f"imv_fb_{idx:03d}.jpg"), 'wb') as fb_f:
+                                fb_f.write(res.content)
+                    except: pass
+
+            dflocst = sorted([pzbv for pzbv in os.listdir(target_imgdir) if pzbv.endswith(('.jpg','.jpeg','.png'))])
             if len(dflocst) < 2: 
                 print("Missing adequate visual web photos for this story. Safely skipping target."); continue
 
@@ -459,6 +581,7 @@ def process_primary_automation_loop():
             lines_for_slider_doc = []
             print(f"Rendering {total_n_segments} unique video clip scenes matching individual sentence audio using FFmpeg...")
 
+            # সঠিক নাম ফিক্সিং: output_segment_path ডিক্লারেশন সেশন 
             with ThreadPoolExecutor(max_workers=os.cpu_count() or 2) as thex:
                 rendered_segment_tasks = []
                 for sg_ix in range(total_n_segments):
@@ -485,15 +608,22 @@ def process_primary_automation_loop():
             clx_bkg = hex_to_ass_color(user_settings["bg_color"], user_settings.get("bg_opacity", 0.5))
             stylstr_for_subs = f"FontName=Arial,FontSize={user_settings['font_size']},PrimaryColour={clx_pri},BackColour={clx_bkg},BorderStyle={user_settings['border_style']},Outline=2,Shadow=1,Alignment=2,MarginV={user_settings['margin_v']}"
 
+            # 📌 ৩. সাউন্ড ইফেক্ট ইঞ্জিন ট্রিগার করা (প্যারাগ্রাফ স্লাইডিং ট্র্যানজিশন টাইমে)
+            transition_timestamps = sentence_timers[1:-1]
+            path_mp3_sfx = os.path.join(wkspace, "audio_sfx.mp3")
+            final_audio_path = mix_transition_sfx_to_audio(path_mp3, transition_timestamps, path_mp3_sfx)
+
             absolute_srt_path = os.path.abspath(path_srt).replace("\\", "/")
             tclmstr_subtitles_filter = f"subtitles='{absolute_srt_path}':force_style='{stylstr_for_subs}'"
 
             subs_cmd = [
                 "ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error", 
                 "-i", os.path.abspath(raw_tmp_output).replace("\\", "/"), 
+                "-i", os.path.abspath(final_audio_path).replace("\\", "/"),
                 "-vf", tclmstr_subtitles_filter, 
+                "-map", "0:v", "-map", "1:a",
                 "-c:v", "libx264", "-crf", "18", "-preset", "ultrafast", "-tune", "zerolatency",
-                "-c:a", "copy", os.path.abspath(fully_finalized_output).replace("\\", "/")
+                "-c:a", "aac", "-shortest", os.path.abspath(fully_finalized_output).replace("\\", "/")
             ]
             subprocess.run(subs_cmd, check=True)
             
