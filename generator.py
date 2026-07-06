@@ -652,7 +652,8 @@ def process_primary_automation_loop():
             final_concat_txt = os.path.join(wkspace, "final_concat.txt")
             with open(final_concat_txt, "w", encoding="utf-8") as f:
                 for p in rendered_paragraph_videos:
-                    f.write(f"file '{os.path.abspath(p).replace('\\', '/').replace(\"'\", \"'\\\\''\")}'\n")
+                    safe_p = os.path.abspath(p).replace('\\', '/').replace("'", "'\\''")
+                    f.write(f"file '{safe_p}'\n")
 
             fully_finalized_output = os.path.join(wkspace, "output_video.mp4")
             print("🔗 Merging all processed segment clips into finalized master timeline...")
