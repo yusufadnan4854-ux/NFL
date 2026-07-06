@@ -55,22 +55,30 @@ def scrape_article(url):
     except:
         return "", []
 
-def get_primary_keyword_app_logic(text):
-    words = re.findall(r'\b[A-Z][a-z]{3,}\b', text) 
-    if len(words) < 2:
-        words = re.findall(r'\b[a-zA-Z]{4,}\b', text)
-        
-    stop_words = {'that', 'this', 'there', 'with', 'from', 'have', 'your', 'which', 'will', 
-                  'about', 'like', 'just', 'when', 'what', 'know', 'feel', 'they', 'team', 'game', 'news', 'first', 'report', 'league', 'south'}
+def extract_hyper_relevant_keyword(title, body_text):
+    """
+    সর্বজনীন ফ্লুইড কুরি ইঞ্জিনিয়ারিং: সংবাদের আসল বিষয় ও খেলার সাপেক্ষে ডাইনামিক ফিল্টার (অন্য খেলার কোন কি-ওয়ার্ড না লাগিয়ে)
+    """
+    words = re.findall(r'\b[A-Z][a-z]{3,}\b', body_text) 
+    stop_words = {'That', 'This', 'There', 'With', 'From', 'Have', 'Your', 'Which', 'Will', 
+                  'About', 'Like', 'Just', 'When', 'What', 'Know', 'Feel', 'They', 'Team', 'Game', 
+                  'News', 'First', 'Report', 'League', 'South', 'Post', 'Draft', 'Roster', 'Nation'}
     filtered = [w for w in words if w.lower() not in stop_words]
     
-    if len(filtered) < 2: 
-        return "NBA Basketball match"
+    if len(filtered) >= 2:
+        unique_nouns = list(dict.fromkeys(filtered))[:2]
+        query = f"{' '.join(unique_nouns)} match action photo"
+    elif len(filtered) == 1:
+        clean_words = [cw for cw in re.sub(r'[^a-zA-Z0-9\s]', '', title).split() if cw.lower() not in stop_words]
+        team_word = clean_words[0] if clean_words else "match"
+        query = f"{filtered[0]} {team_word} sports action photo"
+    else:
+        clean_words = [cw for cw in re.sub(r'[^a-zA-Z0-9\s]', '', title).split() if cw.lower() not in stop_words]
+        main_terms = " ".join(clean_words[:2]) if clean_words else "sports"
+        query = f"{main_terms} match sports action photo"
         
-    most_common = Counter(filtered).most_common(2)
-    keyword = f"{most_common[0][0]} {most_common[1][0]}"
-    print(f"📊 [App Matching Logic] Primary Subject Keyword Extracted: '{keyword}'")
-    return keyword
+    print(f"📊 [Dynamic Sport Query] Generated Query: '{query}'")
+    return query
 
 def search_vercel_cloud_bridge(keyword):
     vercel_endpoint = os.environ.get("VERCEL_BRIDGE_URL")
@@ -78,12 +86,12 @@ def search_vercel_cloud_bridge(keyword):
         return []
     
     try:
-        print(f"🌉 [Vercel Cloud Bridge Active] Fetching High-Res Photos for: '{keyword}'...")
+        print(f"🌉 [Vercel Cloud Bridge Active] Fetching Photos for: '{keyword}'...")
         r = requests.get(f"{vercel_endpoint}?q={urllib.parse.quote(keyword)}", timeout=10)
         if r.status_code == 200:
             data = r.json()
             images = data.get("images", [])
-            print(f"🎉 SUCCESS! Vercel Bridge delivered {len(images)} authentic player photos!")
+            print(f"🎉 SUCCESS! Vercel Bridge delivered {len(images)} authentic photos!")
             return images
     except Exception as e:
         print(f"Vercel Bridge Notice: {e}")
@@ -93,7 +101,7 @@ def search_vercel_cloud_bridge(keyword):
 def search_bing_direct_photos(keyword, max_results=20):
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126.0.0.0 Safari/537.36'}
-        url = f"https://www.bing.com/images/async?q={urllib.parse.quote(keyword + ' NBA basketball')}&first=1&count=25"
+        url = f"https://www.bing.com/images/async?q={urllib.parse.quote(keyword)}&first=1&count=25"
         r = requests.get(url, headers=headers, timeout=8)
         if r.status_code == 200:
             urls = re.findall(r'murl&quot;:&quot;(http[^&]+)&quot;', r.text) or re.findall(r'"murl":"(http[^"]+)"', r.text)
@@ -111,7 +119,7 @@ def search_wikimedia_images(keyword, max_results=15):
             "action": "query",
             "format": "json",
             "generator": "search",
-            "gsrsearch": f"filetype:bitmap {keyword} basketball",
+            "gsrsearch": f"filetype:bitmap {keyword}",
             "gsrlimit": max_results,
             "prop": "imageinfo",
             "iiprop": "url"
@@ -136,7 +144,7 @@ def scrape_images_strictly_web(title, body_text, embedded_photos):
     for hero_p in embedded_photos:
         candidates.append(hero_p)
         
-    subject = get_primary_keyword_app_logic(body_text)
+    subject = extract_hyper_relevant_keyword(title, body_text)
 
     vercel_pics = search_vercel_cloud_bridge(subject)
     candidates.extend(vercel_pics)
@@ -254,6 +262,7 @@ def safe_upload_to_youtube(video_full_path, thumb_full_path, title, video_descri
     from google.oauth2.credentials import Credentials
     from googleapiclient.discovery import build
     from googleapiclient.http import MediaFileUpload
+    from googleapiclient.errors import HttpError
 
     print("\nProcessing backend google security auth directly with secrets variables provided in workflow ...")
     authorized_keys = Credentials(
@@ -268,22 +277,31 @@ def safe_upload_to_youtube(video_full_path, thumb_full_path, title, video_descri
         'snippet': {'title': title[:98], 'description': video_description, 'categoryId': '17'}, 
         'status': {'privacyStatus': 'public', 'selfDeclaredMadeForKids': False}
     }
-    target_job = google_cloud_instance.videos().insert(
-        part="snippet,status", 
-        body=body, 
-        media_body=MediaFileUpload(video_full_path, resumable=True, mimetype="video/mp4")
-    )
-    completed_exec = target_job.execute()
-    newly_deployed_id = completed_exec.get('id')
     
-    print(f"🚀 Mission uploaded successfully! ID: {newly_deployed_id}")
+    try:
+        target_job = google_cloud_instance.videos().insert(
+            part="snippet,status", 
+            body=body, 
+            media_body=MediaFileUpload(video_full_path, resumable=True, mimetype="video/mp4")
+        )
+        completed_exec = target_job.execute()
+        newly_deployed_id = completed_exec.get('id')
+        
+        print(f"🚀 Mission uploaded successfully! ID: {newly_deployed_id}")
 
-    if os.path.exists(thumb_full_path):
-        try:
-            google_cloud_instance.thumbnails().set(videoId=newly_deployed_id, media_body=MediaFileUpload(thumb_full_path)).execute()
-            print("Associated cover photo added effectively.\n")
-        except Exception as e:
-            print(f"Thumbnail upload failed: {e}")
+        if os.path.exists(thumb_full_path):
+            try:
+                google_cloud_instance.thumbnails().set(videoId=newly_deployed_id, media_body=MediaFileUpload(thumb_full_path)).execute()
+                print("Associated cover photo added effectively.\n")
+            except Exception as e:
+                print(f"Thumbnail upload failed: {e}")
+                
+    except HttpError as err:
+        if err.resp.status == 429:
+            print("\n⚠️ YouTube API Daily Upload Limit (429 Quota) Reached for today on this API Client.")
+            print("Video created successfully but skipped live upload until daily quota resets at 00:00 PST.\n")
+        else:
+            raise err
 
 def hex_to_ass_color(hex_str, opacity_float=1.0):
     hex_str = hex_str.lstrip('#')
@@ -459,7 +477,6 @@ def process_primary_automation_loop():
             lines_for_slider_doc = []
             print(f"Rendering {total_n_segments} unique video clip scenes matching individual sentence audio using FFmpeg...")
 
-            # সঠিক নাম ফিক্সিং: output_segment_path ডিক্লারেশন সেশন 
             with ThreadPoolExecutor(max_workers=os.cpu_count() or 2) as thex:
                 rendered_segment_tasks = []
                 for sg_ix in range(total_n_segments):
