@@ -68,8 +68,8 @@ def get_primary_keyword_app_logic(text):
         return "NFL Football match"
         
     most_common = Counter(filtered).most_common(2)
-    keyword = f"{most_common[0][0]} {most_common[1][0]}"
-    print(f"📊 [NFL App Logic] Primary Subject Keyword Extracted: '{keyword}'")
+    keyword = f"{most_common[0][0]} {most_common[1][0]} NFL football"
+    print(f"📊 [NFL Channel Logic] Primary Subject Keyword Extracted: '{keyword}'")
     return keyword
 
 def search_vercel_cloud_bridge(keyword):
@@ -78,12 +78,12 @@ def search_vercel_cloud_bridge(keyword):
         return []
     
     try:
-        print(f"🌉 [Vercel Cloud Bridge Active] Fetching High-Res Photos for: '{keyword}'...")
+        print(f"🌉 [Vercel Cloud Bridge Active] Fetching NFL Photos for: '{keyword}'...")
         r = requests.get(f"{vercel_endpoint}?q={urllib.parse.quote(keyword)}", timeout=10)
         if r.status_code == 200:
             data = r.json()
             images = data.get("images", [])
-            print(f"🎉 SUCCESS! Vercel Bridge delivered {len(images)} authentic player photos!")
+            print(f"🎉 SUCCESS! Vercel Bridge delivered {len(images)} authentic NFL player photos!")
             return images
     except Exception as e:
         print(f"Vercel Bridge Notice: {e}")
@@ -93,7 +93,7 @@ def search_vercel_cloud_bridge(keyword):
 def search_bing_direct_photos(keyword, max_results=20):
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126.0.0.0 Safari/537.36'}
-        url = f"https://www.bing.com/images/async?q={urllib.parse.quote(keyword + ' NFL football')}&first=1&count=25"
+        url = f"https://www.bing.com/images/async?q={urllib.parse.quote(keyword)}&first=1&count=25"
         r = requests.get(url, headers=headers, timeout=8)
         if r.status_code == 200:
             urls = re.findall(r'murl&quot;:&quot;(http[^&]+)&quot;', r.text) or re.findall(r'"murl":"(http[^"]+)"', r.text)
@@ -316,7 +316,7 @@ def process_primary_automation_loop():
                 collected_feeds.append(p_obj)
         except: pass
 
-    collected_feeds.sort(key=lambda sxy: getattr(sxy, 'published_parsed', None) or getattr(sxy, 'updated_updated_parsed', None) or (0,), reverse=False)
+    collected_feeds.sort(key=lambda sxy: getattr(sxy, 'published_parsed', None) or getattr(sxy, 'updated_parsed', None) or (0,), reverse=False)
 
     filter_excluded_title = [xtr.strip().lower() for xtr in user_settings["exclude_title_keywords"].split(",") if xtr.strip()]
     time_limit_scale_hrs = float(user_settings.get("max_age_hours", 24.0))
