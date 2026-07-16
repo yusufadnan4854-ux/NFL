@@ -150,20 +150,28 @@ def get_primary_keyword_app_logic(text):
         print(f"⚠️ Candidate generation failed: {e}")
         candidates = []
 
-    # ২. KeyBERT ব্যবহার করে এই ক্যান্ডিডেটগুলোর মধ্য থেকে সবচেয়ে প্রাসঙ্গিক কিওয়ার্ডটি নির্বাচন করি
+    # ২. KeyBERT এবং sklearn-এর lowercase কনফ্লিক্ট এড়াতে কেস-ম্যাপিং ডিকশনারি তৈরি
+    case_map = {}
+    lowercase_candidates = []
+    for c in candidates:
+        lowered = c.lower()
+        case_map[lowered] = c
+        lowercase_candidates.append(lowered)
+
+    # ৩. KeyBERT ব্যবহার করে এই ক্যান্ডিডেটগুলোর মধ্য থেকে সবচেয়ে প্রাসঙ্গিক কিওয়ার্ডটি নির্বাচন করি
     if kw_model is not None and text and text.strip():
         try:
-            # যদি আমাদের ক্যান্ডিডেট লিস্ট খালি না থাকে, তবে KeyBERT শুধুমাত্র এই ক্যান্ডিডেটগুলোকে র‍্যাঙ্ক করবে
-            if candidates:
-                keywords = kw_model.extract_keywords(text, candidates=candidates, top_n=1)
+            # যদি ক্যান্ডিডেট লিস্ট খালি না থাকে, তবে KeyBERT শুধুমাত্র এই লোয়ারকেস ক্যান্ডিডেটগুলোকে র‍্যাঙ্ক করবে
+            if lowercase_candidates:
+                keywords = kw_model.extract_keywords(text, candidates=lowercase_candidates, top_n=1)
             else:
                 # ক্যান্ডিডেট না পাওয়া গেলে ডিফল্ট হিসেবে ২ শব্দের কিওয়ার্ড খুঁজবে
                 keywords = kw_model.extract_keywords(text, keyphrase_ngram_range=(1, 2), stop_words='english', top_n=1)
                 
             if keywords:
                 keyword = keywords[0][0]
-                # নিশ্চিত করা যেন প্রথম অক্ষরগুলো ক্যাপিটাল লেটার থাকে (যেমন victor oladipo -> Victor Oladipo)
-                keyword_title = keyword.title()
+                # কেস-ম্যাপ ডিকশনারি থেকে মূল ক্যাপিটালাইজড কিওয়ার্ড উদ্ধার করা (অথবা ব্যাকআপ হিসেবে .title() করা)
+                keyword_title = case_map.get(keyword.lower(), keyword.title())
                 print(f"📊 [KeyBERT Semantic Logic] Selected Subject Keyword: '{keyword_title}'")
                 return keyword_title
         except Exception as e:
