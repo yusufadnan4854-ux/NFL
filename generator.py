@@ -27,19 +27,19 @@ try:
     from keybert import KeyBERT
     kw_model = KeyBERT()
 except ImportError:
-    print("📦 KeyBERT লাইব্রেরি পাওয়া যায়নি। ডাইনামিক ইন্সটল করার চেষ্টা করা হচ্ছে...")
+    print("📦 KeyBERT লাইব্রেরি পাওয়া যায়নি। ডাইনামিক ইন্সটল করার চেষ্টা করা হচ্ছে...", flush=True)
     try:
         # রানার এনভায়রনমেন্টে স্বয়ংক্রিয়ভাবে keybert ইন্সটল করা হচ্ছে
         subprocess.run([sys.executable, "-m", "pip", "install", "keybert"], check=True)
         from keybert import KeyBERT
         kw_model = KeyBERT()
-        print("✅ KeyBERT সফলভাবে ইন্সটল এবং লোড করা হয়েছে!")
+        print("✅ KeyBERT সফলভাবে ইন্সটল এবং লোড করা হয়েছে!", flush=True)
     except Exception as inst_err:
-        print(f"❌ KeyBERT ডাইনামিক ইন্সটলেশন ব্যর্থ হয়েছে: {inst_err}")
-        print("⚠️ পূর্বের সাধারণ লজিক (Fallback Regex) ব্যবহার করে কাজ চালানো হবে।")
+        print(f"❌ KeyBERT ডাইনামিক ইন্সটলেশন ব্যর্থ হয়েছে: {inst_err}", flush=True)
+        print("⚠️ পূর্বের সাধারণ লজিক (Fallback Regex) ব্যবহার করে কাজ চালানো হবে।", flush=True)
         kw_model = None
 except Exception as e:
-    print(f"⚠️ KeyBERT ইনিশিয়ালাইজেশন ত্রুটি: {e}")
+    print(f"⚠️ KeyBERT ইনিশিয়ালাইজেশন ত্রুটি: {e}", flush=True)
     kw_model = None
 
 async def generate_voice_and_subtitles(text, voice, audio_path, srt_path):
@@ -147,7 +147,7 @@ def get_primary_keyword_app_logic(text):
         ignore_starts = ('The ', 'A ', 'An ', 'And ', 'But ', 'Or ', 'This ', 'That ', 'These ', 'Those ', 'With ', 'From ', 'About ')
         candidates = [c for c in candidates if not c.startswith(ignore_starts)]
     except Exception as e:
-        print(f"⚠️ Candidate generation failed: {e}")
+        print(f"⚠️ Candidate generation failed: {e}", flush=True)
         candidates = []
 
     # ২. KeyBERT এবং sklearn-এর lowercase কনফ্লিক্ট এড়াতে কেস-ম্যাপিং ডিকশনারি তৈরি
@@ -172,10 +172,10 @@ def get_primary_keyword_app_logic(text):
                 keyword = keywords[0][0]
                 # কেস-ম্যাপ ডিকশনারি থেকে মূল ক্যাপিটালাইজড কিওয়ার্ড উদ্ধার করা (অথবা ব্যাকআপ হিসেবে .title() করা)
                 keyword_title = case_map.get(keyword.lower(), keyword.title())
-                print(f"📊 [KeyBERT Semantic Logic] Selected Subject Keyword: '{keyword_title}'")
+                print(f"📊 [KeyBERT Semantic Logic] Selected Subject Keyword: '{keyword_title}'", flush=True)
                 return keyword_title
         except Exception as e:
-            print(f"⚠️ KeyBERT extraction failed, falling back to basic logic: {e}")
+            print(f"⚠️ KeyBERT extraction failed, falling back to basic logic: {e}", flush=True)
 
     # Fallback Logic: KeyBERT ব্যর্থ হলে বা না থাকলে পূর্বের সাধারণ কাউন্টার ভিত্তিক লজিক
     raw_words = re.findall(r"\b[A-Z][a-zA-Z\'-]{3,}\b", text)
@@ -191,12 +191,12 @@ def get_primary_keyword_app_logic(text):
     if len(filtered) == 0: 
         return ""
     if len(filtered) == 1:
-        print(f"📊 [App Matching Logic] Primary Subject Keyword Extracted: '{filtered[0]}'")
+        print(f"📊 [App Matching Logic] Primary Subject Keyword Extracted: '{filtered[0]}'", flush=True)
         return filtered[0]
         
     most_common = Counter(filtered).most_common(2)
     keyword = f"{most_common[0][0]} {most_common[1][0]}"
-    print(f"📊 [App Matching Logic] Primary Subject Keyword Extracted: '{keyword}'")
+    print(f"📊 [App Matching Logic] Primary Subject Keyword Extracted: '{keyword}'", flush=True)
     return keyword
 
 def search_vercel_cloud_bridge(keyword, engine="ddg"):
@@ -205,16 +205,16 @@ def search_vercel_cloud_bridge(keyword, engine="ddg"):
         return []
     
     try:
-        print(f"🌉 [Vercel Cloud Bridge Active] Fetching High-Res Photos via ({engine}) for: '{keyword}'...")
+        print(f"🌉 [Vercel Cloud Bridge Active] Fetching High-Res Photos via ({engine}) for: '{keyword}'...", flush=True)
         url = f"{vercel_endpoint}?q={urllib.parse.quote(keyword)}&engine={engine}&source={engine}"
         r = requests.get(url, timeout=10)
         if r.status_code == 200:
             data = r.json()
             images = data.get("images", [])
-            print(f"🎉 SUCCESS! Vercel Bridge ({engine}) delivered {len(images)} authentic photos!")
+            print(f"🎉 SUCCESS! Vercel Bridge ({engine}) delivered {len(images)} authentic photos!", flush=True)
             return images
     except Exception as e:
-        print(f"Vercel Bridge ({engine}) Notice: {e}")
+        print(f"Vercel Bridge ({engine}) Notice: {e}", flush=True)
         
     return []
 
@@ -226,10 +226,10 @@ def search_bing_direct_photos(keyword, max_results=20):
         if r.status_code == 200:
             urls = re.findall(r'murl&quot;:&quot;(http[^&]+)&quot;', r.text) or re.findall(r'"murl":"(http[^"]+)"', r.text)
             clean_b_links = [u for u in list(dict.fromkeys(urls)) if any(ext in u.lower() for ext in ['.jpg','.jpeg','.png'])]
-            print(f"✅ Unblocked Direct Search Engine fetched: {len(clean_b_links)} direct high-res images!")
+            print(f"✅ Unblocked Direct Search Engine fetched: {len(clean_b_links)} direct high-res images!", flush=True)
             return clean_b_links[:max_results]
     except Exception as eb:
-        print(f"Direct Search Exception: {eb}")
+        print(f"Direct Search Exception: {eb}", flush=True)
     return []
 
 def search_wikimedia_images(keyword, max_results=15):
@@ -277,16 +277,16 @@ def scrape_images_strictly_web(title, body_text, embedded_photos, num_images_nee
             
         if not is_name:
             subject = f"{subject} {append_word}".strip()
-            print(f"🔧 [Modifier Action] Keyword is not a name. Custom suffix appended -> Final Search: '{subject}'")
+            print(f"🔧 [Modifier Action] Keyword is not a name. Custom suffix appended -> Final Search: '{subject}'", flush=True)
         else:
-            print(f"👤 [Modifier Action] Player name detected! Prefix/Suffix addition skipped -> Final Search: '{subject}'")
+            print(f"👤 [Modifier Action] Player name detected! Prefix/Suffix addition skipped -> Final Search: '{subject}'", flush=True)
 
     ddg_pics = search_vercel_cloud_bridge(subject, engine="ddg")
     candidates.extend(ddg_pics)
     candidates = list(dict.fromkeys(candidates))
 
     if len(candidates) >= num_images_needed:
-        print(f"🎯 [Smart Stopping] DuckDuckGo delivered {len(candidates)} images which meets the target of {num_images_needed}. Skipping other sources.")
+        print(f"🎯 [Smart Stopping] DuckDuckGo delivered {len(candidates)} images which meets the target of {num_images_needed}. Skipping other sources.", flush=True)
         return candidates
 
     bing_pics = search_vercel_cloud_bridge(subject, engine="bing")
@@ -312,7 +312,7 @@ def scrape_images_strictly_web(title, body_text, embedded_photos, num_images_nee
     return list(dict.fromkeys(candidates))
 
 def filter_and_clean_downloaded_images(images_dir):
-    print("🧹 [Dynamic Smart Cleaner] Disabled as per user request. Retaining all downloaded photos.")
+    print("🧹 [Dynamic Smart Cleaner] Disabled as per user request. Retaining all downloaded photos.", flush=True)
 
 def process_dynamic_thumbnail(wkspace, output_path):
     all_files = []
@@ -434,7 +434,7 @@ def safe_upload_to_youtube(video_full_path, thumb_full_path, title, video_descri
     from googleapiclient.discovery import build
     from googleapiclient.http import MediaFileUpload
 
-    print("\nProcessing backend google security auth directly with secrets variables provided in workflow ...")
+    print("\nProcessing backend google security auth directly with secrets variables provided in workflow ...", flush=True)
     authorized_keys = Credentials(
         token=None, refresh_token=os.environ.get('YOUTUBE_REFRESH_TOKEN'), 
         token_uri="https://oauth2.googleapis.com/token", 
@@ -456,22 +456,22 @@ def safe_upload_to_youtube(video_full_path, thumb_full_path, title, video_descri
         completed_exec = target_job.execute()
         newly_deployed_id = completed_exec.get('id')
         
-        print(f"🚀 Mission uploaded successfully! ID: {newly_deployed_id}")
+        print(f"🚀 Mission uploaded successfully! ID: {newly_deployed_id}", flush=True)
 
         if os.path.exists(thumb_full_path):
             try:
                 google_cloud_instance.thumbnails().set(videoId=newly_deployed_id, media_body=MediaFileUpload(thumb_full_path)).execute()
-                print("Associated cover photo added effectively.\n")
+                print("Associated cover photo added effectively.\n", flush=True)
             except Exception as e:
-                print(f"Thumbnail upload failed: {e}")
+                print(f"Thumbnail upload failed: {e}", flush=True)
     except Exception as e:
         err_msg = str(e)
         # ইউটিউব কোটা শেষ হওয়ার ত্রুটি সনাক্তকরণ
         if "quota" in err_msg.lower() or "limit" in err_msg.lower() or "429" in err_msg:
-            print("\n🛑 [Quota Exhausted] YouTube API Daily Upload Quota Limit Exceeded!")
+            print("\n🛑 [Quota Exhausted] YouTube API Daily Upload Quota Limit Exceeded!", flush=True)
             raise YoutubeQuotaExceededException("YouTube API upload quota exceeded.") from e
         else:
-            print(f"❌ YouTube upload failed with unexpected error: {e}")
+            print(f"❌ YouTube upload failed with unexpected error: {e}", flush=True)
             raise e
 
 def hex_to_ass_color(hex_str, opacity_float=1.0):
@@ -542,10 +542,10 @@ def process_primary_automation_loop():
         final_action_items.append(fitem)
 
     if not final_action_items: 
-        print("Completed database scraping securely. Scheduled task waiting.")
+        print("Completed database scraping securely. Scheduled task waiting.", flush=True)
         return
 
-    print(f"📊 Target Items Found: Processing ALL {len(final_action_items)} matching news articles sequentially for [{time_limit_scale_hrs}h]...")
+    print(f"📊 Target Items Found: Processing ALL {len(final_action_items)} matching news articles sequentially for [{time_limit_scale_hrs}h]...", flush=True)
 
     wkspace = os.path.abspath(os.path.join(os.getcwd(), 'workspace'))
     blocked_inside_words = [bk.strip().lower() for bk in user_settings["exclude_body_keywords"].split(",") if bk.strip()]
@@ -572,9 +572,9 @@ def process_primary_automation_loop():
             except Exception:
                 vid_ttl = "Latest Update"
 
-        print(f"\n=========================================================================")
-        print(f"[{track_loop_counter+1}/{len(final_action_items)}] Processing Target Article: >> {vid_ttl}")
-        print(f"=========================================================================")
+        print(f"\n=========================================================================", flush=True)
+        print(f"[{track_loop_counter+1}/{len(final_action_items)}] Processing Target Article: >> {vid_ttl}", flush=True)
+        print(f"=========================================================================", flush=True)
 
         text_chunk_collected, embedded_page_photos = scrape_article(lns)
         content_word_size = len(text_chunk_collected.split())
@@ -596,10 +596,10 @@ def process_primary_automation_loop():
             path_mp3 = os.path.join(wkspace, "audio.mp3")
             path_srt = os.path.join(wkspace, "subtitles.srt")
             
-            print("Encoding Edge-TTS Audio and generating SRT timing anchors...")
+            print("Encoding Edge-TTS Audio and generating SRT timing anchors...", flush=True)
             asyncio.run(generate_voice_and_subtitles(text_chunk_collected, user_settings["voice"], path_mp3, path_srt))
             calc_tlength = get_audio_duration(path_mp3)
-            print(f"⏱️ Total generated audio duration: {calc_tlength:.2f} seconds.")
+            print(f"⏱️ Total generated audio duration: {calc_tlength:.2f} seconds.", flush=True)
 
             rendered_paragraph_videos = []
             raw_paras = text_chunk_collected.split("\n\n")
@@ -609,7 +609,7 @@ def process_primary_automation_loop():
             # কন্ডিশন ১: ভিডিওর দৈর্ঘ্য ৩ মিনিটের কম হলে (১৮০ সেকেন্ডের নিচে) -> ১টি কি-ওয়ার্ড
             # =========================================================================
             if calc_tlength < 180.0:
-                print("🟢 Video duration < 3 mins. Processing as a single unified timeline (1 keyword)...")
+                print("🟢 Video duration < 3 mins. Processing as a single unified timeline (1 keyword)...", flush=True)
                 
                 global_subject = get_primary_keyword_app_logic(text_chunk_collected)
                 
@@ -632,7 +632,7 @@ def process_primary_automation_loop():
                 total_n_segments = len(sentence_timers) - 1
 
                 num_images_to_download = max(2, min(40, total_n_segments))
-                print(f"📥 Length-based download target: downloading {num_images_to_download} images for {total_n_segments} sentences.")
+                print(f"📥 Length-based download target: downloading {num_images_to_download} images for {total_n_segments} sentences.", flush=True)
 
                 candidate_image_urls = scrape_images_strictly_web(vid_ttl, text_chunk_collected, embedded_page_photos, num_images_needed=num_images_to_download, append_toggle=append_kwd_feature, append_word=append_suffix)
 
@@ -658,7 +658,7 @@ def process_primary_automation_loop():
                 dflocst = sorted([pzbv for pzbv in os.listdir(images_dir) if pzbv.endswith(('.jpg','.jpeg','.png'))])
 
                 if not dflocst:
-                    print("⚠️ No direct photos. Running fallback search with general title keywords...")
+                    print("⚠️ No direct photos. Running fallback search with general title keywords...", flush=True)
                     fallback_urls = scrape_images_strictly_web(vid_ttl, text_chunk_collected, [], num_images_needed=num_images_to_download, append_toggle=append_kwd_feature, append_word=append_suffix)
                     for image_link in fallback_urls[:5]:
                         try:
@@ -672,7 +672,7 @@ def process_primary_automation_loop():
                     dflocst = sorted([pzbv for pzbv in os.listdir(images_dir) if pzbv.endswith(('.jpg','.jpeg','.png'))])
 
                 if not dflocst:
-                    print("❌ Missing adequate visual web photos. Safely skipping target.")
+                    print("❌ Missing adequate visual web photos. Safely skipping target.", flush=True)
                     continue
 
                 processed_images = []
@@ -707,7 +707,7 @@ def process_primary_automation_loop():
                                     "fg_path": fg_path
                                 })
                     except Exception as e:
-                        print(f"Error processing image {p_file}: {e}")
+                        print(f"Error processing image {p_file}: {e}", flush=True)
 
                 if not processed_images: 
                     continue
@@ -760,7 +760,7 @@ def process_primary_automation_loop():
             # =========================================================================
             else:
                 num_clusters = int(calc_tlength // 180) + 1
-                print(f"🔵 Video duration >= 3 mins ({calc_tlength:.2f}s). Grouping into {num_clusters} consolidated clusters dynamically...")
+                print(f"🔵 Video duration >= 3 mins ({calc_tlength:.2f}s). Grouping into {num_clusters} consolidated clusters dynamically...", flush=True)
                 
                 actual_clusters = max(1, min(num_clusters, len(raw_paras)))
                 paragraph_groups = []
@@ -783,7 +783,7 @@ def process_primary_automation_loop():
                     os.makedirs(targ_pcdir, exist_ok=True)
                     os.makedirs(targ_vfrmdir, exist_ok=True)
 
-                    print(f"\n🎬 [Processing Cluster {idx+1}/{len(paragraph_groups)}]")
+                    print(f"\n🎬 [Processing Cluster {idx+1}/{len(paragraph_groups)}]", flush=True)
                     
                     path_mp3_grp = os.path.join(para_ws, f"voice_{idx}.mp3")
                     path_srt_grp = os.path.join(para_ws, f"subtitles_{idx}.srt")
@@ -803,7 +803,7 @@ def process_primary_automation_loop():
                     total_n_segments = len(sentence_timers) - 1
 
                     num_images_to_download = max(2, min(30, total_n_segments))
-                    print(f"📥 Cluster download target: downloading {num_images_to_download} images for {total_n_segments} sentences.")
+                    print(f"📥 Cluster download target: downloading {num_images_to_download} images for {total_n_segments} sentences.", flush=True)
 
                     grp_keyword = get_primary_keyword_app_logic(grp_text)
                     
@@ -831,7 +831,7 @@ def process_primary_automation_loop():
                     dflocst = sorted([pzbv for pzbv in os.listdir(images_dir) if pzbv.endswith(('.jpg','.jpeg','.png'))])
 
                     if not dflocst:
-                        print("⚠️ No direct photos. Running fallback search with general title keywords...")
+                        print("⚠️ No direct photos. Running fallback search with general title keywords...", flush=True)
                         fallback_urls = scrape_images_strictly_web(vid_ttl, grp_text, [], num_images_needed=num_images_to_download, append_toggle=append_kwd_feature, append_word=append_suffix)
                         for image_link in fallback_urls[:5]:
                             try:
@@ -846,7 +846,7 @@ def process_primary_automation_loop():
                         dflocst = sorted([pzbv for pzbv in os.listdir(images_dir) if pzbv.endswith(('.jpg','.jpeg','.png'))])
 
                     if not dflocst:
-                        print("❌ Missing adequate visual web photos. Safely skipping paragraph.")
+                        print("❌ Missing adequate visual web photos. Safely skipping paragraph.", flush=True)
                         continue
 
                     processed_images = []
@@ -881,7 +881,7 @@ def process_primary_automation_loop():
                                         "fg_path": fg_path
                                     })
                         except Exception as e:
-                            print(f"Error processing image {p_file}: {e}")
+                            print(f"Error processing image {p_file}: {e}", flush=True)
 
                     if not processed_images: 
                         continue
@@ -932,10 +932,10 @@ def process_primary_automation_loop():
             rendered_paragraph_videos = [p for p in rendered_paragraph_videos if os.path.exists(p)]
 
             if not rendered_paragraph_videos:
-                print("⚠️ No paragraph segments successfully generated. Skipping.")
+                print("⚠️ No paragraph segments successfully generated. Skipping.", flush=True)
                 continue
 
-            print("Designing Dynamic HD Cover Photo...")
+            print("Designing Dynamic HD Cover Photo...", flush=True)
             process_dynamic_thumbnail(wkspace, os.path.join(wkspace, "thumbnail.jpg"))
 
             final_concat_txt = os.path.join(wkspace, "final_concat.txt")
@@ -945,18 +945,18 @@ def process_primary_automation_loop():
                     f.write(f"file '{safe_p}'\n")
 
             fully_finalized_output = os.path.join(wkspace, "output_video.mp4")
-            print("🔗 Merging all processed segment clips into finalized master timeline...")
+            print("🔗 Merging all processed segment clips into finalized master timeline...", flush=True)
             subprocess.run(["ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error", "-safe", "0", "-f", "concat", "-i", os.path.abspath(final_concat_txt).replace("\\", "/"), "-c", "copy", os.path.abspath(fully_finalized_output).replace("\\", "/")], check=True)
 
             # ভিডিও ইউটিউবে আপলোড করা
             safe_upload_to_youtube(fully_finalized_output, os.path.join(wkspace, "thumbnail.jpg"), vid_ttl, f"Complete Highlights Recap: {vid_ttl}")
             
             with open("processed_urls.txt", "a", encoding="utf-8") as fwx_docv: fwx_docv.write(lns+"\n")
-            print("================ 🎯 Complete Workflow Operations executed successfully seamlessly! 💯 ================\n")
+            print("================ 🎯 Complete Workflow Operations executed successfully seamlessly! 💯 ================\n", flush=True)
 
         # ইউটিউব কোটা শেষ হওয়ার কাস্টম এক্সেপশন ক্যাচ করে লুপ ব্রেক করা
         except YoutubeQuotaExceededException:
-            print("\n🛑 stopping loop: YouTube Daily Upload Quota is fully exhausted. Remaining articles will be processed in the next run.")
+            print("\n🛑 stopping loop: YouTube Daily Upload Quota is fully exhausted. Remaining articles will be processed in the next run.", flush=True)
             break
         except Exception as errp: 
             traceback.print_exc()
