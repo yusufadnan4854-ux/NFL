@@ -126,51 +126,55 @@ def group_paragraphs(paragraphs, min_words=80):
 
 # --- ক্যাপিটাল লেটার, অ্যাপোস্ট্রফি ও হাইফেনসহ সব প্লেয়ারদের নাম চেনার স্মার্ট কিওয়ার্ড ফাংশন ---
 def get_primary_keyword_app_logic(text):
-    # ১. প্রথমে টেক্সট থেকে ক্যাপিটাল লেটার বিশিষ্ট শব্দ এবং জোড়া শব্দ (Proper Nouns) খুঁজে ক্যান্ডিডেট লিস্ট তৈরি করি
-    candidates = []
+    multi_candidates = []
+    single_candidates = []
     try:
-        # ২ বা ৩ শব্দের ক্যাপিটাল লেটার নাম (যেমন Victor Oladipo, Koa Peat)
-        raw_names = re.findall(r"\b[A-Z][a-zA-Z\'-]+\s+[A-Z][a-zA-Z\'-]+(?:\s+[A-Z][a-zA-Z\'-]+)?\b", text)
-        candidates.extend(raw_names)
+        # ২ বা ৩ শব্দের ক্যাপিটাল লেটার নাম/পদবি (যেমন: Victor Oladipo, Buffalo Bills, A.J. Brown)
+        # এটি ডটসহ ইনিশিয়াল (যেমন A.J. Brown, P.J. Tucker) সমর্থন করে
+        raw_multi = re.findall(r"\b(?:[A-Z]\.[A-Z]\.\s+|[A-Z][a-zA-Z\'-]+\s+)[A-Z][a-zA-Z\'-]+(?:\s+[A-Z][a-zA-Z\'-]+)?\b", text)
+        multi_candidates.extend(raw_multi)
         
         # একক ক্যাপিটাল লেটার শব্দ (যেমন Suns, Raptors, Celtics)
         raw_single_words = re.findall(r"\b[A-Z][a-zA-Z\'-]{3,}\b", text)
         stop_words_cap = {'That', 'This', 'There', 'With', 'From', 'Have', 'Your', 'Which', 'Will', 
-                          'About', 'Like', 'Just', 'When', 'What', 'Know', 'Feel', 'They', 'NBA', 'NFL', 'ESPN'}
-        single_filtered = [w for w in raw_single_words if w not in stop_words_cap]
-        candidates.extend(single_filtered)
-        
-        # ডুপ্লিকেট বাদ দিয়ে ইউনিক ক্যান্ডিডেট তালিকা তৈরি
-        candidates = list(dict.fromkeys([c.strip() for c in candidates if len(c.strip()) > 2]))
-        
-        # জেনেরিক আর্টিকেল শুরুর শব্দ বাদ দেওয়া (যেমন: "The Celtics" থেকে "The" বাদ দেওয়া)
-        ignore_starts = ('The ', 'A ', 'An ', 'And ', 'But ', 'Or ', 'This ', 'That ', 'These ', 'Those ', 'With ', 'From ', 'About ')
-        candidates = [c for c in candidates if not c.startswith(ignore_starts)]
+                          'About', 'Like', 'Just', 'When', 'What', 'Know', 'Feel', 'They', 'NBA', 'NFL', 'ESPN', 'WR3'}
+        single_candidates = [w for w in raw_single_words if w not in stop_words_cap]
     except Exception as e:
         print(f"⚠️ Candidate generation failed: {e}", flush=True)
-        candidates = []
 
-    # ২. KeyBERT এবং sklearn-এর lowercase কনফ্লিক্ট এড়াতে কেস-ম্যাপিং ডিকশনারি তৈরি
+    # জেনেরিক আর্টিকেল শুরুর শব্দ বাদ দিয়ে ইউনিক তালিকা তৈরি
+    ignore_starts = ('The ', 'A ', 'An ', 'And ', 'But ', 'Or ', 'This ', 'That ', 'These ', 'Those ', 'With ', 'From ', 'About ', 'Who ')
+    multi_candidates = [c.strip() for c in multi_candidates if not c.startswith(ignore_starts) and len(c.strip()) > 3]
+    multi_candidates = list(dict.fromkeys(multi_candidates))
+    
+    single_candidates = [c.strip() for c in single_candidates if len(c.strip()) > 2]
+    single_candidates = list(dict.fromkeys(single_candidates))
+
+    # একাধিক শব্দের কিওয়ার্ডকে সর্বোচ্চ অগ্রাধিকার দেওয়া
+    if multi_candidates:
+        selected_candidates = multi_candidates
+    else:
+        selected_candidates = single_candidates
+
+    # KeyBERT এবং sklearn-এর lowercase কনফ্লিক্ট এড়াতে কেস-ম্যাপিং ডিকশনারি তৈরি
     case_map = {}
     lowercase_candidates = []
-    for c in candidates:
+    for c in selected_candidates:
         lowered = c.lower()
         case_map[lowered] = c
         lowercase_candidates.append(lowered)
 
-    # ৩. KeyBERT ব্যবহার করে এই ক্যান্ডিডেটগুলোর মধ্য থেকে সবচেয়ে প্রাসঙ্গিক কিওয়ার্ডটি নির্বাচন করি
+    # KeyBERT ব্যবহার করে এই ক্যান্ডিডেটগুলোর মধ্য থেকে সবচেয়ে প্রাসঙ্গিক কিওয়ার্ডটি নির্বাচন করি
     if kw_model is not None and text and text.strip():
         try:
-            # যদি ক্যান্ডিডেট লিস্ট খালি না থাকে, তবে KeyBERT শুধুমাত্র এই লোয়ারকেস ক্যান্ডিডেটগুলোকে র‍্যাঙ্ক করবে
             if lowercase_candidates:
                 keywords = kw_model.extract_keywords(text, candidates=lowercase_candidates, top_n=1)
             else:
-                # ক্যান্ডিডেট না পাওয়া গেলে ডিফল্ট হিসেবে ২ শব্দের কিওয়ার্ড খুঁজবে
                 keywords = kw_model.extract_keywords(text, keyphrase_ngram_range=(1, 2), stop_words='english', top_n=1)
                 
             if keywords:
                 keyword = keywords[0][0]
-                # কেস-ম্যাপ ডিকশনারি থেকে মূল ক্যাপিটালাইজড কিওয়ার্ড উদ্ধার করা (অথবা ব্যাকআপ হিসেবে .title() করা)
+                # কেস-ম্যাপ ডিকশনারি থেকে মূল ক্যাপিটালাইজড কিওয়ার্ড উদ্ধার করা
                 keyword_title = case_map.get(keyword.lower(), keyword.title())
                 print(f"📊 [KeyBERT Semantic Logic] Selected Subject Keyword: '{keyword_title}'", flush=True)
                 return keyword_title
